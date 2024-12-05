@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yılan Oyunu</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        #gameArea {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        canvas {
+            border: 2px solid #444;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        .message {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+            z-index: 1;
+        }
+
+        .game-over {
+            color: red;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .start-message {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: opacity 0.5s ease;
+        }
+
+        .score {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+        }
+
+        /* Video Tam Ekran Stil */
+        #gameVideo {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 10;
+            display: none; /* Başlangıçta video gizli */
+        }
+
+        /* Ses onay penceresi */
+        #soundConsent {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-size: 20px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        .sound-consent-button {
+            background-color: #444;
+            border: none;
+            padding: 10px 20px;
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameArea">
+        <canvas id="gameCanvas"></canvas>
+        <div class="start-message" id="startMessage">Başlatmak İçin Space'e Basınız</div>
+        <div class="score" id="score">Skor: 0</div>
+    </div>
+    <video id="gameVideo" autoplay muted>
+        <source src="video.mp4" type="video/mp4">
+        Tarayıcınız video desteği sağlamıyor.
+    </video>
+
+    <!-- Ses onay penceresi -->
+    <div id="soundConsent">
+        <p>oyunu oynamak istermisiniz?</p>
+        <input type="checkbox" id="enableSound" checked> kuralları kabul et
+        <button class="sound-consent-button" id="startGameButton">Başlat</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const scale = 20;  // Yılanın her segmentinin boyutu
+        const rows = 20;   // Yılanın yatayda kaç hücreye yayılacağını belirler
+        const columns = 20; // Yılanın dikeyde kaç hücreye yayılacağını belirler
+
+        canvas.width = columns * scale;
+        canvas.height = rows * scale;
+
+        let snake = [{x: 10, y: 10}]; // Başlangıç yılanı
+        let food = {x: 15, y: 15};     // Başlangıç yemi
+        let direction = 'RIGHT';       // Başlangıç yönü
+        let gameStarted = false;      // Oyunun başlayıp başlamadığını kontrol eder
+        let score = 0;                // Skor
+
+        const startMessage = document.getElementById('startMessage');
+        const scoreElement = document.getElementById('score');
+        const gameVideo = document.getElementById('gameVideo');
+        const soundConsent = document.getElementById('soundConsent');
+        const enableSoundCheckbox = document.getElementById('enableSound');
+        const startGameButton = document.getElementById('startGameButton');
+
+        // Yılanın hareket etmesi için ana oyun döngüsü
+        function gameLoop() {
+            if (gameStarted) {
+                updateGame();
+                drawGame();
+            }
+            setTimeout(gameLoop, 100);
+        }
+
+        // Yılanın hareketini güncelle
+        function updateGame() {
+            const head = { ...snake[0] };
+
+            if (direction === 'UP') head.y -= 1;
+            if (direction === 'DOWN') head.y += 1;
+            if (direction === 'LEFT') head.x -= 1;
+            if (direction === 'RIGHT') head.x += 1;
+
+            snake.unshift(head); // Yeni başı ekle
+
+            if (head.x === food.x && head.y === food.y) {
+                generateFood(); // Yılan yemi yedi
+                score++; // Skoru artır
+                updateScore(); // Skoru güncelle
+            } else {
+                snake.pop(); // Yılanın sonunu sil
+            }
+
+            if (isGameOver()) {
+                alert('Oyun Bitti!');
+                resetGame();
+            }
+
+            // 6. skora ulaşıldığında video başlat
+            if (score >= 6 && !gameVideo.playing) {
+                gameVideo.style.display = 'block'; // Videoyu göster
+                gameVideo.play(); // Videoyu başlat
+            }
+        }
+
+        // Oyunun sonlanıp sonlanmadığını kontrol et
+        function isGameOver() {
+            const head = snake[0];
+
+            // Yılan duvara çarptı mı?
+            if (head.x < 0 || head.x >= columns || head.y < 0 || head.y >= rows) {
+                return true;
+            }
+
+            // Yılan kendi kendine çarptı mı?
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Yeni bir yem oluştur
+        function generateFood() {
+            food = {
+                x: Math.floor(Math.random() * columns),
+                y: Math.floor(Math.random() * rows)
+            };
+        }
+
+        // Yılanı ve yemi çiz
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Ekranı temizle
+
+            // Yılanı çiz
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? 'green' : 'lime'; // İlk segment baş
+                ctx.fillRect(segment.x * scale, segment.y * scale, scale, scale);
+            });
+
+            // Yemi çiz
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x * scale, food.y * scale, scale, scale);
+        }
+
+        // Skoru güncelle
+        function updateScore() {
+            scoreElement.textContent = `Skor: ${score}`;
+        }
+
+        // Klavye ok tuşlarını dinle
+        document.addEventListener('keydown', (event) => {
+            if (!gameStarted) return;
+
+            if (event.key === 'ArrowUp' && direction !== 'DOWN') {
+                direction = 'UP';
+            } else if (event.key === 'ArrowDown' && direction !== 'UP') {
+                direction = 'DOWN';
+            } else if (event.key === 'ArrowLeft' && direction !== 'RIGHT') {
+                direction = 'LEFT';
+            } else if (event.key === 'ArrowRight' && direction !== 'LEFT') {
+                direction = 'RIGHT';
+            }
+        });
+
+        // Oyunu sıfırla
+        function resetGame() {
+            snake = [{x: 10, y: 10}];
+            direction = 'RIGHT';
+            generateFood();
+            score = 0;
+            updateScore();
+            gameStarted = false;
+            startMessage.style.opacity = '1'; // Başlatma mesajını tekrar göster
+            gameVideo.style.display = 'none'; // Videoyu gizle
+        }
+
+        // Başlangıçta ses onayını kontrol et
+        startGameButton.addEventListener('click', () => {
+            soundConsent.style.display = 'none'; // Ses onay penceresini gizle
+
+            if (enableSoundCheckbox.checked) {
+                gameVideo.muted = false; // Ses açılacak
+            }
+
+            gameStarted = true;
+            startMessage.style.opacity = '0'; // Başlatma mesajını gizle
+            gameLoop(); // Oyun döngüsünü başlat
+        });
+
+        // Sayfa yüklendiğinde ses onayı sor
+        window.onload = () => {
+            gameVideo.muted = true; // Başlangıçta ses kapalı
+            soundConsent.style.display = 'block'; // Ses onay penceresini göster
+        };
+    </script>
+</body>
+</html>
